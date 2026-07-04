@@ -4,9 +4,9 @@ from sqlalchemy import select
 from pydantic import BaseModel
 from typing import Annotated
 
-from app.db.session import get_async_db
+from app.db import get_async_db
 from app.models.user import User, Student, Role
-from app.core.security import get_current_user
+from app.core.deps import get_current_user
 
 router = APIRouter(prefix="/api/v1/students", tags=["Students"])
 

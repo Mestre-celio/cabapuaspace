@@ -4,11 +4,11 @@ from sqlalchemy import select, update
 from pydantic import BaseModel
 from typing import Annotated
 
-from app.db.session import get_async_db
+from app.db import get_async_db
 from app.models.user import User
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.class_slot import ClassSlot
-from app.core.security import get_current_user
+from app.core.deps import get_current_user
 import uuid
 
 router = APIRouter(prefix="/api/v1/appointments", tags=["Appointments"])

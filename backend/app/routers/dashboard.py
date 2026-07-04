@@ -6,7 +6,7 @@ from typing import Annotated, Optional
 
 from app.db import get_async_db
 from app.models.user import User
-from app.core.security import get_current_user
+from app.core.deps import get_current_user
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["Dashboard"])
 
