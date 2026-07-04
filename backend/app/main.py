@@ -1,26 +1,37 @@
+import sys
+import traceback
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
+from app.core.logging import setup_logging, RequestContextMiddleware, get_logger
 from app.db import create_db_and_tables
 from app.routers import auth, dashboard, appointments, students
 
+logger = get_logger(__name__)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: criar tabelas se necessário
-    await create_db_and_tables()
-    
-    # Iniciar jobs agendados
+    setup_logging(log_level="INFO", json_output=True)
+    logger.info("Starting Cabapua API", env=settings.APP_ENV)
+
+    try:
+        await create_db_and_tables()
+    except Exception as e:
+        print(f"FATAL: create_db_and_tables failed: {e}", file=sys.stderr, flush=True)
+        traceback.print_exc(file=sys.stderr)
+        raise
+
     try:
         from app.jobs.birthday_job import scheduler
         scheduler.start()
     except Exception as e:
-        print(f"Erro ao iniciar scheduler: {e}")
-        
+        logger.error("Failed to start scheduler", error=str(e))
+
     yield
-    
-    # Shutdown: limpar conexões se necessário
+
     try:
         from app.jobs.birthday_job import scheduler
         scheduler.shutdown()
@@ -34,7 +45,8 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS
+app.add_middleware(RequestContextMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -42,6 +54,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+try:
+    from prometheus_fastapi_instrumentator import Instrumentator
+    Instrumentator().instrument(app).expose(app, endpoint="/metrics")
+except ImportError:
+    pass
 
 # Routers
 app.include_router(auth.router)

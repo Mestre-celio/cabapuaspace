@@ -1,8 +1,14 @@
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Union
+from typing import Annotated, Optional
 from jose import jwt, JWTError
 from passlib.context import CryptContext
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.core.config import settings
+from app.db import get_async_db
+from app.models.user import User
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -34,3 +40,37 @@ def decode_access_token(token: str) -> Optional[dict]:
 def get_token_user_id(token: str) -> Optional[str]:
     payload = decode_access_token(token)
     return payload.get("sub") if payload else None
+security = HTTPBearer()
+
+async def get_token_header(
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]
+) -> str:
+    return credentials.credentials
+
+async def get_current_user(
+    token: Annotated[str, Depends(get_token_header)],
+    db: AsyncSession = Depends(get_async_db)
+) -> User:
+    payload = decode_access_token(token)
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido ou expirado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token malformado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    result = await db.execute(select(User).where(User.id == int(user_id)))
+    user = result.scalar_one_or_none()
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuário não encontrado ou inativo",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user

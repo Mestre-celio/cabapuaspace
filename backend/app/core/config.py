@@ -1,9 +1,15 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 from typing import List
 import os
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True,
+        extra="ignore",
+    )
+
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./cabapua.db")
     
     # JWT
@@ -25,10 +31,7 @@ class Settings(BaseSettings):
     # App
     APP_NAME: str = "Cabapuã Connect API"
     APP_VERSION: str = "1.0.0"
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    APP_ENV: str = os.getenv("ENVIRONMENT", "development")
 
 @lru_cache()
 def get_settings() -> Settings:

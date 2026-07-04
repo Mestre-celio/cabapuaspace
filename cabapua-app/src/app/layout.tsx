@@ -2,6 +2,7 @@ import './globals.css';
 import { Cinzel, Inter } from 'next/font/google';
 import Link from 'next/link';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { Providers } from './providers';
 
 const cinzel = Cinzel({ subsets: ['latin'], variable: '--font-cinzel' });
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
@@ -19,6 +20,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" className={`${cinzel.variable} ${inter.variable}`}>
       <body className="bg-[#050505] text-white font-inter">
+        <Providers>
         <AuthProvider>
           <nav className="sticky top-0 z-50 bg-[#0A0A0A]/90 backdrop-blur-md border-b border-[#D4AF37]/30">
             <div className="container mx-auto px-6 py-4 flex justify-between items-center">
@@ -43,6 +45,7 @@ export default function RootLayout({
             <p>© 2026 CT Cabapuã Brasil. Todos os direitos reservados.</p>
           </footer>
         </AuthProvider>
+        </Providers>
       </body>
     </html>
   );
