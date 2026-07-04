@@ -8,12 +8,14 @@ from typing import Annotated
 from app.db import get_async_db
 from app.models.user import User
 from app.schemas.auth import (
-    UserRegister, UserLogin, TokenResponse, 
+    UserRegister, UserLogin, TokenResponse,
+    RefreshRequest,
     UserResponse, MessageResponse
 )
 from app.core.security import (
-    verify_password, get_password_hash, 
-    create_access_token, decode_access_token
+    verify_password, get_password_hash,
+    create_access_token, decode_access_token,
+    create_refresh_token, decode_refresh_token,
 )
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
@@ -86,13 +88,14 @@ async def register(
     await db.commit()
     await db.refresh(new_user)
     
-    # Gerar token
-    access_token = create_access_token(
-        data={"sub": str(new_user.id), "role": new_user.role}
-    )
+    # Gerar tokens
+    token_data = {"sub": str(new_user.id), "role": new_user.role}
+    access_token = create_access_token(data=token_data)
+    refresh_token = create_refresh_token(data=token_data)
     
     return TokenResponse(
         access_token=access_token,
+        refresh_token=refresh_token,
         user=UserResponse.model_validate(new_user)
     )
 
@@ -126,13 +129,52 @@ async def login(
         user.last_login = datetime.now(timezone.utc)
         await db.commit()
     
-    # Gerar token
-    access_token = create_access_token(
-        data={"sub": str(user.id), "role": user.role}
-    )
+    # Gerar tokens
+    token_data = {"sub": str(user.id), "role": user.role}
+    access_token = create_access_token(data=token_data)
+    refresh_token = create_refresh_token(data=token_data)
     
     return TokenResponse(
         access_token=access_token,
+        refresh_token=refresh_token,
+        user=UserResponse.model_validate(user)
+    )
+
+# === POST /refresh (renovar access_token) ===
+@router.post("/refresh", response_model=TokenResponse)
+async def refresh_token(
+    body: RefreshRequest,
+    db: AsyncSession = Depends(get_async_db)
+) -> TokenResponse:
+    payload = decode_refresh_token(body.refresh_token)
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token inválido ou expirado",
+        )
+    
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token malformado",
+        )
+    
+    result = await db.execute(select(User).where(User.id == int(user_id)))
+    user = result.scalar_one_or_none()
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuário não encontrado ou inativo",
+        )
+    
+    token_data = {"sub": str(user.id), "role": user.role}
+    access_token = create_access_token(data=token_data)
+    refresh_token = create_refresh_token(data=token_data)
+    
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
         user=UserResponse.model_validate(user)
     )
 
